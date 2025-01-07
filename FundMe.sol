@@ -14,25 +14,49 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
 contract FundMe {
     mapping (address=>uint256) public funders2Amount;
 
-    uint256 MINIMUM_VALUE = 1*10**18;//wei
+    uint256 MINIMUM_VALUE = 100*10**18;//wei
 
     AggregatorV3Interface internal dataFeed;
 
+    uint256 constant TARGET = 1000*10**18;
+
+    address public owner;
+
     //构造函数
     constructor() {
+        owner = msg.sender;
         dataFeed = AggregatorV3Interface(0x694AA1769357215DE4FAC081bf1f309aDC325306);
     }
 
+    //收款函数:fund
     function fund() external payable {
         require(convertETH2USD(msg.value)>MINIMUM_VALUE,"send more ETH");
         funders2Amount[msg.sender]=msg.value;
     }
 
+    //转换
     function convertETH2USD(uint256 ethAmount) internal view returns(uint256) {
         uint256 ethPrice = uint256(getChainlinkDataFeedLatestAnswer());
         return ethPrice*ethAmount;
     }
 
+    //在锁定期内，达到目标值，生产商可以提款
+    function getFund() external {
+        require(convertETH2USD(address(this).balance) >= TARGET, "Target is not reached");
+        //转账
+        //transfer: transfer ETH and revert if transction failed
+        payable(msg.sender).transfer(address(this).balance);
+        require(msg.sender == owner,"this function can only be called by owner");
+        //send: transfer ETH and return false if transction failed
+        //call在所有情况都可以使用call，call可以有参数
+    }
+
+    function transferOwnership(address newOwner) public {
+        require(msg.sender == owner,"this function can only be called by owner");
+        owner = newOwner;
+    }
+
+    
     function getChainlinkDataFeedLatestAnswer() public view returns (int) {
         // prettier-ignore
         (
